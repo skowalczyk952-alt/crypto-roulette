@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Krypto Ruletka</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a5f3a 0%, #0d3d26 100%);
+            min-height: 100vh;
+            color: white;
+        }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .card {
+            background: #1f2937;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h1, h2, h3 { text-align: center; }
+        button {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-primary { background: #eab308; color: black; }
+        .btn-green { background: #16a34a; color: white; }
+        .btn-red { background: #dc2626; color: white; }
+        .info { color: #9ca3af; font-size: 14px; margin-top: 5px; text-align:center; }
+        .balance { font-size: 24px; color: #eab308; font-weight: bold; text-align:center; margin: 10px 0; }
+        .chips { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 15px 0; }
+        .chip {
+            aspect-ratio: 1; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; font-size: 12px; cursor: pointer;
+            background: #3b82f6; color: white; border: 3px solid transparent;
+        }
+        .chip.selected { background: #eab308; color: black; border-color: #fde047; }
+        .chip.all-in { background: linear-gradient(135deg, #9333ea, #db2777); }
+        .numbers { display: grid; grid-template-columns: repeat(12, 1fr); gap: 3px; margin: 10px 0; }
+        .number { aspect-ratio: 1; display:flex; align-items:center; justify-content:center; border-radius:6px; font-weight:bold; font-size:11px; cursor:pointer; }
+        .number.red { background: #dc2626; color:white; }
+        .number.black { background: #000; color:white; }
+        .number.green { background: #16a34a; color:white; }
+        .outside { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; margin: 10px 0; }
+        .bets-list { max-height: 150px; overflow-y:auto; margin:10px 0; }
+        .bet-item {
+            background: #374151; padding: 8px; margin:5px 0; border-radius:6px;
+            display:flex; justify-content:space-between; font-size:13px;
+        }
+        .timer { font-size:32px; text-align:center; color:#eab308; font-weight:bold; padding:20px; }
+        .result-number { font-size:48px; text-align:center; padding:20px; border-radius:12px; font-weight:bold; display:inline-block; margin:10px; }
+        .center { text-align:center; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="app"></div>
+    </div>
+<script>
+const ROULETTE = '0xAF8fB14c7A0410341D20E8183e2F449BF043a756';
+const TOKEN    = '0x47E4A357073e9D3E87717244C0B97b6fb038efe1';
+const CROUPIER = '0x5B87833D4414eBC85c5E1De5AEB8766AE11e013e';
+
+let account = null;
+let balance = 0;
+let isCroupier = false;
+let selectedChip = 100;
+let bets = [];
+let timer = null;
+let gamePhase = 'betting';
+let winningNum = '';
+let isTimerRunning = false;
+let loading = false;
+let roundId = 0;
+
+const chips = [25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 'ALL'];
+const red = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+const layout = [
+    [3,6,9,12,15,18,21,24,27,30,33,36],
+    [2,5,8,11,14,17,20,23,26,29,32,35],
+    [1,4,7,10,13,16,19,22,25,28,31,34]
+];
+
+function getColor(n) {
+    if (n === 0) return 'green';
+    return red.includes(n) ? 'red' : 'black';
+}
+
+async function connect() {
+    if (!window.ethereum) {
+        alert('Zainstaluj MetaMask!');
+        return;
+    }
+    try {
+        loading = true;
+        render();
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        account = accounts[0];
+        isCroupier = account.toLowerCase() === CROUPIER.toLowerCase();
+
+        const balData = '0x70a08231' + account.substring(2).padStart(64, '0');
+        const balResult = await window.ethereum.request({
+            method: 'eth_call',
+            params: [{ to: TOKEN, data: balData }, 'latest']
+        });
+        balance = parseInt(balResult, 16) / 1e18;
+        loading = false;
+        render();
+    } catch (e) {
+        alert('Błąd: ' + e.message);
+        loading = false;
+        render();
+    }
+}
+
+async function placeBet(type, val) {
+    if (loading || gamePhase !== 'betting') return;
+    let amount = selectedChip === 'ALL' ? balance : selectedChip;
+    if (amount > balance || amount <= 0) {
+        alert('Nieprawidłowa kwota!');
+        return;
+    }
+    if (amount > 1000000) {
+        alert('Kwota za duża, maks 1 000 000.');
+        return;
+    }
+
+    loading = true;
+    render();
+    try {
+        const amountWei = Math.floor(amount * 1e18);
+        const approveData = '0x095ea7b3' + ROULETTE.substring(2).padStart(64,'0') + 'f'.repeat(64);
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: account, to: TOKEN, data: approveData }]
+        });
+
+        await new Promise(r => setTimeout(r, 2000));
+        let betData = '0x27002ca8';
+        betData += type.toString(16).padStart(64, '0');
+        betData += '0000000000000000000000000000000000000000000000000000000000000060';
+        betData += amountWei.toString(16).padStart(64, '0');
+        if (typeof val === 'number') {
+            betData += '0000000000000000000000000000000000000000000000000000000000000001';
+            betData += val.toString(16).padStart(64, '0');
+        } else {
+            betData += '0000000000000000000000000000000000000000000000000000000000000000';
+        }
+
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: account, to: ROULETTE, data: betData, gas: '0x493e0' }]
+        });
+        bets.push({ type, val, amount });
+        balance -= amount;
+        alert('Zakład postawiony!');
+    } catch (e) {
+        alert('Błąd: ' + e.message);
+    }
+    loading = false;
+    render();
+}
+
+async function startRound() {
+    try {
+        loading = true;
+        render();
+        const data = '0x2f30caee';
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: account, to: ROULETTE, data }]
+        });
+        roundId++;
+        bets = [];
+        gamePhase = 'betting';
+        loading = false;
+        render();
+        alert('Runda rozpoczęta!');
+    } catch (e) {
+        alert('Błąd: ' + e.message);
+        loading = false;
+        render();
+    }
+}
+
+function startTimer() {
+    timer = 10;
+    isTimerRunning = true;
+    render();
+    const interval = setInterval(() => {
+        timer--;
+        if (timer <= 0) {
+            clearInterval(interval);
+            timer = null;
+            isTimerRunning = false;
+            gamePhase = 'spinning';
+        }
+        render();
+    }, 1000);
+}
+
+async function finalize() {
+    const num = parseInt(winningNum);
+    if (isNaN(num) || num < 0 || num > 36) {
+        alert('Wpisz 0-36!');
+        return;
+    }
+    try {
+        loading = true;
+        render();
+        const data = '0x0c08bf88' + num.toString(16).padStart(64, '0');
+        await window.ethereum.request({
+            method: 'eth_sendTransaction',
+            params: [{ from: account, to: ROULETTE, data }]
+        });
+        gamePhase = 'result';
+        loading = false;
+        render();
+    } catch (e) {
+        alert('Błąd: ' + e.message);
+        loading = false;
+        render();
+    }
+}
+
+function render() {
+    const app = document.getElementById('app');
+    if (!account) {
+        app.innerHTML = `
+            <div class="card center">
+                <h1>🎰 Krypto Ruletka</h1>
+                <p class="info">Połącz MetaMask</p>
+                <button class="btn-primary" onclick="connect()" ${loading ? 'disabled' : ''}>
+                    ${loading ? '⏳ Łączenie...' : '🔗 Połącz'}
+                </button>
+            </div>`;
+        return;
+    }
+
+    if (isCroupier) {
+        app.innerHTML = `
+            <div class="card center">
+                <h1>🎩 Krupier</h1>
+                <p>${account}</p>
+                <div class="balance">${Math.round(balance)} BLK</div>
+                <p>Runda #${roundId}</p>
+            </div>
+            ${gamePhase === 'betting' ? `
+                <div class="card center">
+                    <button class="btn-green" onclick="startTimer()" ${isTimerRunning ? 'disabled' : ''}>
+                        ⏱️ START (10s)
+                    </button>
+                </div>` : ''}
+            ${gamePhase === 'spinning' ? `
+                <div class="card center">
+                    <input type="number" min="0" max="36" value="${winningNum}"
+                           oninput="winningNum=this.value"
+                           style="width:100%;padding:15px;font-size:24px;text-align:center;border-radius:8px;border:2px solid #eab308;background:#374151;color:white;">
+                    <button class="btn-primary" onclick="finalize()">✅ ROZLICZ</button>
+                </div>` : ''}
+            ${gamePhase === 'result' ? `
+                <div class="card center">
+                    <h2>Wynik</h2>
+                    <div class="result-number ${getColor(parseInt(winningNum))}">${winningNum}</div>
+                    <button class="btn-green" onclick="startRound()">🔄 NOWA RUNDA</button>
+                </div>` : ''}
+        `;
+        return;
+    }
+
+    // Gracz
+    app.innerHTML = `
+        <div class="card center">
+            <div class="balance">💰 ${Math.round(balance)} BLK</div>
+            <p>Runda #${roundId}</p>
+            ${timer !== null ? `<div class="timer">⏰ ${timer}s</div>` : ''}
+        </div>
+        ${gamePhase === 'betting' ? `
+        <div class="card">
+            <h3>Wybierz żeton:</h3>
+            <div class="chips">
+                ${chips.map(c => `
+                    <div class="chip ${c===selectedChip?'selected':''} ${c==='ALL'?'all-in':''}"
+                         onclick="selectedChip='${c}';render();">
+                        ${c}
+                    </div>`).join('')}
+            </div>
+        </div>
+        <div class="card">
+            <button class="number green" onclick="placeBet(0,0)">0</button>
+            <div class="numbers">
+                ${layout.map(row=>row.map(n=>`
+                    <button class="number ${getColor(n)}" onclick="placeBet(0,${n})">${n}</button>
+                `).join('')).join('')}
+            </div>
+            <div class="outside">
+                <button onclick="placeBet(9)">1-12</button>
+                <button onclick="placeBet(10)">13-24</button>
+                <button onclick="placeBet(11)">25-36</button>
+                <button onclick="placeBet(7)">1-18</button>
+                <button onclick="placeBet(8)">19-36</button>
+                <button onclick="placeBet(3)" style="background:#dc2626;">RED</button>
+                <button onclick="placeBet(4)" style="background:#000;">BLACK</button>
+                <button onclick="placeBet(5)">EVEN</button>
+                <button onclick="placeBet(6)">ODD</button>
+            </div>
+        </div>` : ''}
+        ${gamePhase==='spinning'?`
+        <div class="card center">
+            <h2>🎲 Krupier obraca ruletką...</h2>
+            <div style="width:60px;height:60px;border:4px solid #eab308;border-top-color:transparent;border-radius:50%;margin:20px auto;animation:spin 1s linear infinite;"></div>
+        </div>`:''}
+        ${gamePhase==='result'?`
+        <div class="card center">
+            <h2>Wynik</h2>
+            <div class="result-number ${getColor(parseInt(winningNum))}">${winningNum}</div>
+        </div>`:''}
+        ${loading?`
+        <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;">
+            <div class="card center" style="max-width:200px;">
+                <div style="width:40px;height:40px;border:4px solid #eab308;border-top-color:transparent;border-radius:50%;margin:0 auto 10px;animation:spin 1s linear infinite;"></div>
+                <p>Przetwarzanie...</p>
+            </div>
+        </div>`:''}
+    `;
+}
+render();
+</script>
+</body>
+</html>

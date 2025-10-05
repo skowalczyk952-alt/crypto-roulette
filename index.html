@@ -177,7 +177,7 @@
 
     <script>
         const ROULETTE = '0xAF8fB14c7A0410341D20E8183e2F449BF043a756';
-        const TOKEN = '0x47E4A357073e9D3E87717244C0B97b6fb038efe1';
+        const TOKEN = '0xb242a79a765CdA59FD953De3a46F22A087B8E856';
         const CROUPIER = '0x5B87833D4414eBC85c5E1De5AEB8766AE11e013e';
 
         let account = null;
@@ -188,6 +188,7 @@
         let timer = null;
         let gamePhase = 'betting';
         let winningNum = '';
+        let isTimerRunning = false;
         let loading = false;
         let roundId = 0;
 
@@ -216,7 +217,16 @@
                     method: 'eth_call',
                     params: [{to: TOKEN, data: balData}, 'latest']
                 });
-                balance = Math.round(parseInt(balResult, 16) / 1000000000000000000);
+                
+                // Better balance parsing
+                try {
+                    const balanceWei = BigInt(balResult);
+                    balance = Math.round(Number(balanceWei) / 1e18);
+                    if (isNaN(balance)) balance = 0;
+                } catch(err) {
+                    console.error('Balance parse error:', err);
+                    balance = 0;
+                }
                 
                 const roundData = '0x7c602d9c';
                 const roundResult = await window.ethereum.request({
@@ -311,16 +321,18 @@
 
         function startTimer() {
             timer = 10;
+            isTimerRunning = true;
             render();
+            
             const interval = setInterval(() => {
                 timer--;
-                render();
                 if (timer <= 0) {
                     clearInterval(interval);
                     timer = null;
+                    isTimerRunning = false;
                     gamePhase = 'spinning';
-                    render();
                 }
+                render();
             }, 1000);
         }
 
@@ -422,7 +434,7 @@
                 <div class="card">
                     <div class="balance">💰 ${balance.toLocaleString()} BLK</div>
                     <p class="info">Runda #${roundId}</p>
-                    ${timer !== null ? `<div class="timer">⏰ ${timer}s</div>` : ''}
+                    ${timer !== null && isTimerRunning ? `<div class="timer">⏰ ${timer}s</div>` : ''}
                 </div>
                 
                 ${gamePhase === 'betting' ? `
@@ -509,5 +521,4 @@
         render();
     </script>
 </body>
-
 </html>

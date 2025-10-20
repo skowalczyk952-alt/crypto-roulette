@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruletka Misiaczki (MSI)</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: white;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+        }
+
+        .wallet-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .balance {
+            font-size: 1.5em;
+            font-weight: bold;
+        }
+
+        .connect-btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .connect-btn:hover {
+            background: #45a049;
+            transform: scale(1.05);
+        }
+
+        .game-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+        }
+
+        .roulette-board {
+            flex: 1;
+            min-width: 600px;
+            background: #0a5c0a;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .numbers-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2px;
+            margin-bottom: 10px;
+        }
+
+        .number-cell {
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid gold;
+            position: relative;
+        }
+
+        .number-cell:hover {
+            transform: scale(1.1);
+            z-index: 10;
+            box-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+        }
+
+        .red {
+            background: #dc3545;
+        }
+
+        .black {
+            background: #212529;
+        }
+
+        .green {
+            background: #28a745;
+        }
+
+        .zero-cell {
+            grid-column: span 3;
+            background: #28a745;
+        }
+
+        .outside-bets {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .bet-cell {
+            padding: 15px 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid gold;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: bold;
+            font-size: 12px;
+        }
+
+        .bet-cell:hover {
+            background: rgba(255, 215, 0, 0.3);
+            transform: scale(1.05);
+        }
+
+        .controls-panel {
+            flex: 0 0 350px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 20px;
+            border-radius: 15px;
+        }
+
+        .bet-amount {
+            margin-bottom: 20px;
+        }
+
+        .bet-amount input {
+            width: 100%;
+            padding: 10px;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+        }
+
+        .current-bets {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .bet-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 12px;
+        }
+
+        .croupier-panel {
+            background: rgba(255, 215, 0, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .croupier-panel.active {
+            display: block;
+        }
+
+        .croupier-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 5px 0;
+            background: #f44336;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .croupier-btn:hover {
+            background: #da190b;
+        }
+
+        .croupier-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .timer {
+            font-size: 2em;
+            text-align: center;
+            padding: 20px;
+            background: rgba(255, 0, 0, 0.3);
+            border-radius: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .timer.active {
+            display: block;
+        }
+
+        .result-input {
+            width: 100%;
+            padding: 10px;
+            font-size: 18px;
+            border: none;
+            border-radius: 5px;
+            margin: 10px 0;
+            color: #333;
+        }
+
+        .selected-bet {
+            background: rgba(255, 215, 0, 0.4) !important;
+            box-shadow: 0 0 20px gold;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            color: black;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 500px;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            z-index: 2000;
+            animation: slideIn 0.5s;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(400px); }
+            to { transform: translateX(0); }
+        }
+
+        .column-bets {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 5px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎰 Ruletka Misiaczki (MSI) 🎰</h1>
+            <p>Minimalna stawka: 100 MSI | Połącz MetaMask aby grać</p>
+        </div>
+
+        <div class="wallet-info">
+            <div>
+                <div>Adres: <span id="walletAddress">Nie połączono</span></div>
+                <div class="balance">Saldo: <span id="balance">0</span> MSI</div>
+            </div>
+            <button class="connect-btn" id="connectWallet">Połącz MetaMask</button>
+        </div>
+
+        <div class="game-container">
+            <div class="roulette-board">
+                <div class="numbers-grid" id="numbersGrid"></div>
+                
+                <div class="outside-bets">
+                    <div class="bet-cell" data-bet="1-12" data-payout="3" data-type="7">1-12</div>
+                    <div class="bet-cell" data-bet="13-24" data-payout="3" data-type="8">13-24</div>
+                    <div class="bet-cell" data-bet="25-36" data-payout="3" data-type="9">25-36</div>
+                    <div class="bet-cell" data-bet="even" data-payout="2" data-type="3">Parzyste</div>
+                    <div class="bet-cell" data-bet="odd" data-payout="2" data-type="4">Nieparzyste</div>
+                    <div class="bet-cell" data-bet="1-18" data-payout="2" data-type="5">1-18</div>
+                </div>
+                
+                <div class="outside-bets">
+                    <div class="bet-cell red" data-bet="red" data-payout="2" data-type="1" style="grid-column: span 3">Czerwone</div>
+                    <div class="bet-cell black" data-bet="black" data-payout="2" data-type="2" style="grid-column: span 3">Czarne</div>
+                </div>
+
+                <div class="outside-bets">
+                    <div class="bet-cell" data-bet="19-36" data-payout="2" data-type="6" style="grid-column: span 6">19-36</div>
+                </div>
+
+                <div class="column-bets">
+                    <div class="bet-cell" data-bet="column1" data-payout="3" data-type="10">Kolumna 1</div>
+                    <div class="bet-cell" data-bet="column2" data-payout="3" data-type="11">Kolumna 2</div>
+                    <div class="bet-cell" data-bet="column3" data-payout="3" data-type="12">Kolumna 3</div>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <div class="bet-amount">
+                    <h3>Kwota zakładu:</h3>
+                    <input type="number" id="betAmount" value="100" min="100" step="10">
+                </div>
+
+                <div class="current-bets">
+                    <h3>Twoje zakłady:</h3>
+                    <div id="betsList"></div>
+                    <div style="margin-top: 10px; font-weight: bold;">
+                        Suma: <span id="totalBets">0</span> MSI
+                    </div>
+                </div>
+
+                <button class="connect-btn" id="clearBets" style="width: 100%; background: #ff9800;">
+                    Wyczyść zakłady
+                </button>
+
+                <div class="croupier-panel" id="croupierPanel">
+                    <h3>⚙️ Panel Krupiera</h3>
+                    <button class="croupier-btn" id="startRound">Rozpocznij rundę</button>
+                    <button class="croupier-btn" id="startTimer" disabled>Start odliczanie (10s)</button>
+                    <div class="timer" id="timer">10</div>
+                    <input type="number" class="result-input" id="resultInput" 
+                           placeholder="Wpisz wynik (0-36)" min="0" max="36" style="display: none;">
+                    <button class="croupier-btn" id="submitResult" style="display: none;">
+                        Zatwierdź wynik
+                    </button>
+                </div>
+
+                <button class="connect-btn" id="toggleCroupier" style="width: 100%; margin-top: 20px; background: #9c27b0;">
+                    Tryb Krupiera
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="resultModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Wynik rundy</h2>
+            <p id="modalMessage"></p>
+            <button class="connect-btn" onclick="closeModal()" style="margin-top: 20px;">OK</button>
+        </div>
+    </div>
+
+    <script>
+        const rouletteNumbers = {
+            red: [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36],
+            black: [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35]
+        };
+
+        const boardLayout = [
+            [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+            [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+            [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+        ];
+
+        let web3;
+        let account;
+        let msiContract;
+        let currentBets = [];
+        let isRoundActive = false;
+        let isCroupierMode = false;
+        let totalBetAmount = 0;
+
+        const msiABI = [
+            {"constant": true, "inputs": [{"name": "account", "type": "address"}], "name": "balanceOf", "outputs": [{"name": "", "type": "uint256"}], "type": "function"}
+        ];
+
+        const MSI_CONTRACT_ADDRESS = "0x9D7f74d0C41E726EC95884E0e97Fa6129e3b5E99";
+
+        function initializeBoard() {
+            const grid = document.getElementById('numbersGrid');
+            
+            const zeroCell = document.createElement('div');
+            zeroCell.className = 'number-cell zero-cell';
+            zeroCell.textContent = '0';
+            zeroCell.dataset.number = '0';
+            zeroCell.dataset.payout = '35';
+            zeroCell.dataset.type = '0';
+            zeroCell.onclick = () => placeBet(0, 0, 35);
+            grid.appendChild(zeroCell);
+            
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 12; col++) {
+                    const num = boardLayout[row][col];
+                    const cell = document.createElement('div');
+                    cell.className = 'number-cell';
+                    
+                    if (rouletteNumbers.red.includes(num)) {
+                        cell.classList.add('red');
+                    } else {
+                        cell.classList.add('black');
+                    }
+                    
+                    cell.textContent = num;
+                    cell.dataset.number = num;
+                    cell.dataset.payout = '35';
+                    cell.dataset.type = '0';
+                    cell.onclick = () => placeBet(0, num, 35);
+                    
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        async function connectWallet() {
+            if (typeof window.ethereum !== 'undefined') {
+                try {
+                    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    account = accounts[0];
+                    web3 = new Web3(window.ethereum);
+                    
+                    msiContract = new web3.eth.Contract(msiABI, MSI_CONTRACT_ADDRESS);
+                    
+                    await updateBalance();
+                    
+                    document.getElementById('walletAddress').textContent = account.substring(0, 6) + '...' + account.substring(38);
+                    document.getElementById('connectWallet').textContent = 'Połączono ✓';
+                    
+                } catch (error) {
+                    console.error('Błąd połączenia:', error);
+                    alert('Błąd połączenia z MetaMask');
+                }
+            } else {
+                alert('Zainstaluj MetaMask!');
+            }
+        }
+
+        async function updateBalance() {
+            if (msiContract && account) {
+                try {
+                    const balance = await msiContract.methods.balanceOf(account).call();
+                    const balanceInMSI = web3.utils.fromWei(balance, 'ether');
+                    document.getElementById('balance').textContent = parseFloat(balanceInMSI).toFixed(2);
+                } catch (error) {
+                    console.error('Błąd pobierania salda:', error);
+                }
+            }
+        }
+
+        function placeBet(betType, value, payout) {
+            if (!isRoundActive) {
+                alert('Poczekaj na rozpoczęcie rundy!');
+                return;
+            }
+            
+            const betAmount = parseInt(document.getElementById('betAmount').value);
+            
+            if (betAmount < 100) {
+                alert('Minimalna stawka to 100 MSI!');
+                return;
+            }
+            
+            const currentBalance = parseFloat(document.getElementById('balance').textContent);
+            if (totalBetAmount + betAmount > currentBalance) {
+                alert('Niewystarczające saldo!');
+                return;
+            }
+            
+            currentBets.push({
+                type: betType,
+                value: value,
+                amount: betAmount,
+                payout: payout
+            });
+            
+            totalBetAmount += betAmount;
+            updateBetsList();
+            highlightBet(betType, value);
+        }
+
+        function highlightBet(betType, value) {
+            if (betType === 0) {
+                const cell = document.querySelector(`[data-number="${value}"]`);
+                if (cell) cell.classList.add('selected-bet');
+            } else {
+                const cell = document.querySelector(`[data-type="${betType}"]`);
+                if (cell) cell.classList.add('selected-bet');
+            }
+        }
+
+        function updateBetsList() {
+            const betsList = document.getElementById('betsList');
+            betsList.innerHTML = '';
+            
+            currentBets.forEach(bet => {
+                const betItem = document.createElement('div');
+                betItem.className = 'bet-item';
+                betItem.innerHTML = `<span>${getBetDescription(bet)}</span><span>${bet.amount} MSI</span>`;
+                betsList.appendChild(betItem);
+            });
+            
+            document.getElementById('totalBets').textContent = totalBetAmount;
+        }
+
+        function getBetDescription(bet) {
+            if (bet.type === 0) return `Liczba ${bet.value}`;
+            
+            const descriptions = {
+                1: 'Czerwone', 2: 'Czarne', 3: 'Parzyste', 4: 'Nieparzyste',
+                5: 'Niskie (1-18)', 6: 'Wysokie (19-36)', 7: 'Pierwszy tuzin',
+                8: 'Drugi tuzin', 9: 'Trzeci tuzin', 10: 'Kolumna 1',
+                11: 'Kolumna 2', 12: 'Kolumna 3'
+            };
+            
+            return descriptions[bet.type] || `Zakład ${bet.type}`;
+        }
+
+        function clearBets() {
+            currentBets = [];
+            totalBetAmount = 0;
+            updateBetsList();
+            document.querySelectorAll('.selected-bet').forEach(cell => cell.classList.remove('selected-bet'));
+        }
+
+        function toggleCroupierMode() {
+            isCroupierMode = !isCroupierMode;
+            const panel = document.getElementById('croupierPanel');
+            
+            if (isCroupierMode) {
+                panel.classList.add('active');
+                document.getElementById('toggleCroupier').textContent = 'Wyłącz tryb krupiera';
+            } else {
+                panel.classList.remove('active');
+                document.getElementById('toggleCroupier').textContent = 'Tryb krupiera';
+            }
+        }
+
+        function startRound() {
+            isRoundActive = true;
+            document.getElementById('startRound').disabled = true;
+            document.getElementById('startTimer').disabled = false;
+            showNotification('Runda rozpoczęta! Przyjmowanie zakładów.');
+        }
+
+        function startCountdown() {
+            document.getElementById('startTimer').disabled = true;
+            const timerDiv = document.getElementById('timer');
+            timerDiv.classList.add('active');
+            
+            let seconds = 10;
+            timerDiv.textContent = seconds;
+            
+            const countdown = setInterval(() => {
+                seconds--;
+                timerDiv.textContent = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(countdown);
+                    endBettingPhase();
+                }
+            }, 1000);
+        }
+
+        function endBettingPhase() {
+            isRoundActive = false;
+            document.getElementById('timer').classList.remove('active');
+            document.getElementById('resultInput').style.display = 'block';
+            document.getElementById('submitResult').style.display = 'block';
+            showNotification('Koniec przyjmowania zakładów! Krupier wprowadza wynik.');
+        }
+
+        function submitResult() {
+            const result = parseInt(document.getElementById('resultInput').value);
+            
+            if (isNaN(result) || result < 0 || result > 36) {
+                alert('Wprowadź poprawny wynik (0-36)!');
+                return;
+            }
+            
+            processResult(result);
+            
+            document.getElementById('startRound').disabled = false;
+            document.getElementById('startTimer').disabled = true;
+            document.getElementById('resultInput').style.display = 'none';
+            document.getElementById('submitResult').style.display = 'none';
+            document.getElementById('resultInput').value = '';
+        }
+
+        function processResult(winningNumber) {
+            let totalWon = 0;
+            
+            currentBets.forEach(bet => {
+                if (checkWin(bet.type, bet.value, winningNumber)) {
+                    totalWon += bet.amount * bet.payout;
+                }
+            });
+            
+            showResultModal(winningNumber, totalWon, totalBetAmount);
+            clearBets();
+        }
+
+        function checkWin(betType, value, number) {
+            if (betType === 0) return value === number;
+            
+            switch(betType) {
+                case 1: return rouletteNumbers.red.includes(number);
+                case 2: return rouletteNumbers.black.includes(number);
+                case 3: return number !== 0 && number % 2 === 0;
+                case 4: return number % 2 === 1;
+                case 5: return number >= 1 && number <= 18;
+                case 6: return number >= 19 && number <= 36;
+                case 7: return number >= 1 && number <= 12;
+                case 8: return number >= 13 && number <= 24;
+                case 9: return number >= 25 && number <= 36;
+                case 10: return number % 3 === 1 && number !== 0;
+                case 11: return number % 3 === 2 && number !== 0;
+                case 12: return number % 3 === 0 && number !== 0;
+                default: return false;
+            }
+        }
+
+        function showResultModal(number, won, bet) {
+            const modal = document.getElementById('resultModal');
+            const title = document.getElementById('modalTitle');
+            const message = document.getElementById('modalMessage');
+            
+            const color = number === 0 ? 'Zielone' : (rouletteNumbers.red.includes(number) ? 'Czerwone' : 'Czarne');
+            
+            title.textContent = won > 0 ? 'WYGRANA!' : 'Przegrana';
+            message.innerHTML = `
+                <h3>Wylosowano: ${number} (${color})</h3>
+                <p>Postawiono: ${bet} MSI</p>
+                <p>Wygrano: ${won} MSI</p>
+                <p><strong>Bilans: ${won - bet >= 0 ? '+' : ''}${won - bet} MSI</strong></p>
+            `;
+            
+            modal.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('resultModal').classList.remove('active');
+        }
+
+        function showNotification(message) {
+            const notif = document.createElement('div');
+            notif.className = 'notification';
+            notif.textContent = message;
+            document.body.appendChild(notif);
+            
+            setTimeout(() => notif.remove(), 3000);
+        }
+
+        document.getElementById('connectWallet').addEventListener('click', connectWallet);
+        document.getElementById('clearBets').addEventListener('click', clearBets);
+        document.getElementById('toggleCroupier').addEventListener('click', toggleCroupierMode);
+        document.getElementById('startRound').addEventListener('click', startRound);
+        document.getElementById('startTimer').addEventListener('click', startCountdown);
+        document.getElementById('submitResult').addEventListener('click', submitResult);
+
+        document.querySelectorAll('.bet-cell').forEach(cell => {
+            cell.addEventListener('click', () => {
+                const betType = parseInt(cell.dataset.type);
+                const payout = parseInt(cell.dataset.payout);
+                placeBet(betType, 0, payout);
+            });
+        });
+
+        initializeBoard();
+    </script>
+</body>
+</html>
